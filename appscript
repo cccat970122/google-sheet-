@@ -1,0 +1,75 @@
+function f3() {
+  const sheetName = "sheet1";
+  const columnToCheck = 3;
+  const emailColumn = 2;
+  const emailSentColumn = 5;
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+
+  if (!sheet) {
+    throw new Error("找不到工作表：" + sheetName);
+  }
+
+  const data = sheet.getDataRange().getValues();
+  const uniqueKeys = new Set();
+  const rowsToDelete = [];
+
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    const email = row[emailColumn - 1];
+    const key = row[columnToCheck - 1];
+    const emailSent = row[emailSentColumn - 1];
+
+    if (uniqueKeys.has(key)) {
+      if (emailSent !== "已寄送") {
+        try {
+          const doc = DocumentApp.create("機動組");
+          doc.getBody().appendParagraph("謝謝你的填寫，此程式由機動組製作");
+
+          const url = doc.getUrl();
+          doc.addViewer(email);
+
+          const subject = doc.getName();
+          const body = "謝謝您的填寫，但是您投稿的歌曲已重複: " + url;
+
+          GmailApp.sendEmail(email, subject, body);
+        } catch (err) {
+          console.log("發送郵件時出現錯誤: " + err.message);
+        }
+      }
+      rowsToDelete.push(i + 1); // 標記重複的行以便後續刪除
+    } else {
+      uniqueKeys.add(key); // 將該歌曲加入集合，標記為唯一
+    }
+  }
+
+  rowsToDelete.reverse().forEach((rowIndex) => {
+    sheet.deleteRow(rowIndex);
+  });
+
+  const updatedData = sheet.getDataRange().getValues();
+  for (let i = 0; i < updatedData.length; i++) {
+    const row = updatedData[i];
+    const email = row[emailColumn - 1];
+    const emailSent = row[emailSentColumn - 1];
+
+    if (emailSent === "已寄送") {
+      continue;
+    }
+
+    try {
+      const doc = DocumentApp.create("機動組");
+      doc.getBody().appendParagraph("謝謝你的填寫，此程式由機動組製作");
+
+      const url = doc.getUrl();
+      doc.addViewer(email);
+
+      const subject = doc.getName();
+      const body = "謝謝您的填寫，您很幸運投稿的歌曲未重複: " + url;
+
+      GmailApp.sendEmail(email, subject, body);
+      sheet.getRange(i + 1, emailSentColumn).setValue("已寄送");
+    } catch (err) {
+      console.log("發送郵件時出現錯誤: " + err.message);
+    }
+  }
+}
